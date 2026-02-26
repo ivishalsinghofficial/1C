@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>Waterways-1C Scanner</title>
+    <!-- Styling -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- QR Library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body { background-color: #121212; color: #e0e0e0; font-family: -apple-system, sans-serif; padding: 15px; }
+        .container { max-width: 500px; margin: auto; }
+        
+        /* Bold Text Header */
+        .header-title { 
+            font-size: 2.2rem; 
+            font-weight: 900; 
+            color: #ffffff; 
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        #reader { 
+            width: 100%; border-radius: 20px; overflow: hidden; 
+            background-color: #000; border: 2px solid #333;
+        }
+
+        #scanned-text { 
+            font-size: 34px; font-weight: 800; color: #00d1ff; 
+            margin: 15px 0; word-break: break-all; min-height: 45px;
+            line-height: 1.2; text-shadow: 0 0 10px rgba(0,209,255,0.2);
+        }
+
+        /* Buttons */
+        .btn-lg { padding: 18px; border-radius: 15px; font-weight: bold; font-size: 1.1rem; width: 100%; margin-bottom: 12px; }
+        .btn-primary { background-color: #007bff; border: none; }
+        .btn-success { background-color: #28a745; border: none; }
+        .btn-danger { background-color: #dc3545; border: none; }
+
+        /* Loader Animation */
+        .loader { 
+            display: none; width: 45px; height: 45px; border: 5px solid #333; 
+            border-top: 5px solid #00d1ff; border-radius: 50%; 
+            animation: spin 1s linear infinite; margin: 15px auto; 
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        #status { font-size: 0.95rem; color: #aaa; font-weight: 500; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container text-center">
+    <!-- Bold Header -->
+    <h1 class="header-title">Waterways-1C</h1>
+
+    <div id="status">Ready to scan</div>
+
+    <!-- Camera Window -->
+    <div id="reader"></div>
+
+    <!-- Scanned Result Area -->
+    <div id="scanned-text">---</div>
+
+    <!-- UI Controls -->
+    <div id="controls">
+        <button id="start-btn" class="btn btn-primary btn-lg">📷 START CAMERA</button>
+        
+        <!-- Save Button (Appears after successful scan) -->
+        <button id="save-btn" class="btn btn-success btn-lg" style="display:none;">💾 SAVE DATA</button>
+        
+        <!-- Reset Button (Below Save, Red Color) -->
+        <button id="reset-btn" class="btn btn-danger btn-lg" style="display:none;">🔄 SCAN NEXT / RESET</button>
+    </div>
+
+    <!-- Processing Feedback -->
+    <div class="loader" id="loader"></div>
+</div>
+
+<script>
+    // --- UPDATED CONFIGURATION FOR "Waterways-1C" ---
+    const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeg0tK4vxe3ed0ZIAPm17iwz_0eigFK_KQ8pYDgvasZ5ni1TA/formResponse";
+    const ENTRY_ID = "entry.1560896688"; 
+
+    const html5QrCode = new Html5Qrcode("reader");
+    const startBtn = document.getElementById('start-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    const scannedTextDisplay = document.getElementById('scanned-text');
+    const loader = document.getElementById('loader');
+    const statusDiv = document.getElementById('status');
+
+    let lastResult = "";
+
+    // 1. START CAMERA
+    startBtn.onclick = () => {
+        startBtn.disabled = true;
+        statusDiv.innerText = "Accessing camera...";
+        
+        const config = { 
+            fps: 20, 
+            qrbox: (w, h) => { return { width: w * 0.9, height: h * 0.45 } } 
+        };
+
+        html5QrCode.start({ facingMode: "environment" }, config, (text) => {
+            lastResult = text;
+            scannedTextDisplay.innerText = text;
+            
+            // Show Save and Reset buttons
+            saveBtn.style.display = 'block';
+            resetBtn.style.display = 'block';
+            statusDiv.innerText = "✅ Code Detected!";
+            
+            // Vibration Feedback
+            if (navigator.vibrate) navigator.vibrate(80);
+            
+            // Stop camera
+            html5QrCode.stop();
+            startBtn.style.display = 'none';
+        }).catch(err => {
+            statusDiv.innerText = "Error: Use Chrome/Safari and Allow Camera.";
+            startBtn.disabled = false;
+        });
+    };
+
+    // 2. RESET/SCAN NEXT FUNCTION
+    resetBtn.onclick = () => {
+        lastResult = "";
+        scannedTextDisplay.innerText = "---";
+        saveBtn.style.display = 'none';
+        resetBtn.style.display = 'none';
+        startBtn.style.display = 'block';
+        startBtn.disabled = false;
+        startBtn.innerText = "📷 START CAMERA";
+        statusDiv.innerText = "Ready to scan next item";
+    };
+
+    // 3. SAVE DATA TO GOOGLE SHEET
+    saveBtn.onclick = async () => {
+        loader.style.display = 'block';
+        saveBtn.disabled = true;
+        resetBtn.disabled = true;
+        statusDiv.innerText = "Uploading to Sheet...";
+
+        const queryUrl = `${FORM_URL}?${ENTRY_ID}=${encodeURIComponent(lastResult)}`;
+
+        try {
+            await fetch(queryUrl, {
+                method: 'POST',
+                mode: 'no-cors'
+            });
+
+            // Assuming success if fetch doesn't throw a network error
+            loader.style.display = 'none';
+            saveBtn.style.display = 'none';
+            saveBtn.disabled = false;
+            resetBtn.disabled = false;
+            scannedTextDisplay.innerText = "---";
+            statusDiv.innerText = "✅ DATA SAVED SUCCESSFULLY!";
+            
+        } catch (e) {
+            // ERROR HANDLING (Network failure)
+            loader.style.display = 'none';
+            saveBtn.disabled = false;
+            resetBtn.disabled = false;
+            statusDiv.innerText = "❌ FAILED TO SAVE DATA!";
+            alert("NETWORK ERROR: The data was not saved. Check your internet connection and click the Green SAVE button again.");
+        }
+    };
+</script>
+</body>
+</html>
